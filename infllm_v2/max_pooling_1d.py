@@ -1,4 +1,5 @@
 import torch
+import warnings
 from . import C
 
 def max_pooling_1d(
@@ -52,7 +53,6 @@ def max_pooling_1d_varlen(
     cu_seqlens_k: torch.Tensor, # batch_size + 1
     cache_lens: torch.Tensor, # batch_size
     max_seqlen_q: int,
-    max_seqlen_k: int,
     local_blocks: int,
     init_blocks: int,
     block_size: int = 64,
@@ -69,7 +69,6 @@ def max_pooling_1d_varlen(
         cu_seqlens_k: Cumulative sequence lengths for keys (batch_size + 1,)
         cache_lens: Cache lengths for each sequence in the batch (batch_size,)
         max_seqlen_q: Maximum query sequence length in the batch
-        max_seqlen_k: Maximum key sequence length in the batch
         local_blocks: Number of local blocks for window attention
         init_blocks: Number of initial blocks to mask with inf
         block_size: Block size (default: 64)
@@ -99,13 +98,19 @@ def max_pooling_1d_varlen(
     
     # Verify dimensions
     assert cu_seqlens_q[-1].item() == total_q, f"total_q mismatch: {cu_seqlens_q[-1].item()} vs {total_q}"
-    assert input.shape[2] == max_seqlen_k, f"max_k mismatch: {input.shape[2]} vs {max_seqlen_k}"
     assert cache_lens.shape[0] == batch_size, f"cache_lens batch size mismatch: {cache_lens.shape[0]} vs {batch_size}"
     
     # Calculate output length based on max sequence length and max cache length
     max_cache_len = cache_lens.max().item()
     total_len = max_seqlen_q + max_cache_len
     out_len = (total_len + block_size - 1) // block_size
+    
+    # WARNING: 为了适配 CUDA Graph，max_seqlen_k 已在 C 代码中硬编码为 524288
+    warnings.warn(
+        "max_pooling_1d_varlen: max_seqlen_k is hardcoded to 524288 in C code to accommodate CUDA Graph. "
+        "This may over-allocate memory. TODO: Dynamically set this according to real input requirements.",
+        UserWarning
+    )
     
     output = torch.zeros(num_heads, total_q, out_len, device=input.device, dtype=input.dtype)
     with torch.cuda.device(input.device):
@@ -121,7 +126,6 @@ def max_pooling_1d_varlen(
             batch_size,
             num_heads,
             max_seqlen_q,
-            max_seqlen_k,
             out_len,
             kernel_size,
             stride,
