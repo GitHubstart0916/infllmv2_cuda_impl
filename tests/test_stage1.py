@@ -170,13 +170,12 @@ def test_flash_attn_varlen(seqlen_q=256, seqlen_k=15, n_heads=32, n_kv_heads=2, 
         cu_seqlens_k=cu_seqlens_k,
         cu_seqlens_v=cu_seqlens_k,
         max_seqlen_q=max(seqlen_qs),
-        max_seqlen_k=max(seqlen_ks),
         causal=causal,
     )
     # breakpoint()
 
     if bench:
-        f = lambda : infllmv2_attn_stage1(q, k, v, cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k, max_seqlen_q=max(seqlen_qs), max_seqlen_k=max(seqlen_ks), return_attn_probs=True, causal=causal)
+        f = lambda : infllmv2_attn_stage1(q, k, v, cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k, cu_seqlens_v=cu_seqlens_k, max_seqlen_q=max(seqlen_qs), return_attn_probs=True, causal=causal)
         for _ in range(3):
             f()
         torch.cuda.synchronize()
@@ -187,7 +186,7 @@ def test_flash_attn_varlen(seqlen_q=256, seqlen_k=15, n_heads=32, n_kv_heads=2, 
         et = time.time()
         print(f"seqlen_q: {seqlen_qs}, seqlen_k: {seqlen_ks}, causal: {causal}")
         print(f"infllmv2_attn_stage1 time: {(et - st) / 10 * 1000} ms")
-        f = lambda : infllmv2_attn_stage1(q, k, v, cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k, max_seqlen_q=max(seqlen_qs), max_seqlen_k=max(seqlen_ks), return_attn_probs=False, causal=causal)
+        f = lambda : infllmv2_attn_stage1(q, k, v, cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k, cu_seqlens_v=cu_seqlens_k, max_seqlen_q=max(seqlen_qs), return_attn_probs=False, causal=causal)
         for _ in range(3):
             f()
         torch.cuda.synchronize()
@@ -214,7 +213,7 @@ def test_flash_attn_varlen(seqlen_q=256, seqlen_k=15, n_heads=32, n_kv_heads=2, 
             print("nonzero diff count:", nz.shape[0])
             print("sample nonzero diff indices (up to 20):", nz[:20].tolist())
         # print("online score max diff :", (online_score - flash_score).abs().max())
-        breakpoint()
+        # breakpoint()
         if (naive_score - flash_score).abs().max() > 1e-2:
             print(f"error: seqlen_qs={seqlen_qs}, seqlen_ks={seqlen_ks}")
 

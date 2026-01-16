@@ -70,7 +70,6 @@ def test_stage1_cp_load(causal=True):
                 cu_seqlens_k=cu_seqlens_k,
                 cu_seqlens_v=cu_seqlens_k,
                 max_seqlen_q=max_seqlen_q,
-                max_seqlen_k=max_seqlen_k,
                 causal=causal,
             )
             # exit()
@@ -108,7 +107,6 @@ def test_stage1_cp_load(causal=True):
             cu_seqlens_k=cu_seqlens_k,
             cu_seqlens_v=cu_seqlens_k,
             max_seqlen_q=max_seqlen_q,
-            max_seqlen_k=max_seqlen_k,
             causal=causal,
         )
         cp1_scores.append(cp_1_score)

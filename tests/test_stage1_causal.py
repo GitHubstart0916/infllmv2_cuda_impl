@@ -63,7 +63,6 @@ def test_naive_torch_implementation(causal=False):
         cu_seqlens_k=torch.tensor([0, k.shape[0]], device=q.device, dtype=torch.int32),
         cu_seqlens_v=torch.tensor([0, k.shape[0]], device=q.device, dtype=torch.int32),
         max_seqlen_q=q.shape[0],
-        max_seqlen_k=k.shape[0],
         causal=causal,
     )[:, :q.shape[0], :k.shape[0]]
     print(stage1_score)
