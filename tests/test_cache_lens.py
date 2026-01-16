@@ -50,7 +50,6 @@ def test_cache_lens_tensor():
             cu_seqlens_k,
             cache_lens,
             max_seqlen_q,
-            max_seqlen_k,
             local_blocks=local_blocks,
             init_blocks=init_blocks,
             block_size=block_size,

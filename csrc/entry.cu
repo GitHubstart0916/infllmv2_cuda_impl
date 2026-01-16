@@ -162,7 +162,6 @@ void max_pooling_1d_varlen(
     int batch_size,
     int num_heads,
     int max_seqlen_q,
-    int max_seqlen_k,
     int out_len,
     int kernel_size,
     int stride,
@@ -171,6 +170,10 @@ void max_pooling_1d_varlen(
     int local_blocks,
     int init_blocks
 ) {
+    // WARNING: 为了适配 CUDA Graph，这里将 max_seqlen_k 设置为一个很大的常数（524288）。
+    // TODO: 优化此处的写法，根据实际最大序列长度动态赋值，以避免过多显存占用。
+    const int max_seqlen_k = 524288;
+    
     DTYPE_SWITCH(dtype, [&] {
         max_pooling_1d_varlen_func<elem_type>(
             reinterpret_cast<cudaStream_t>(stream),
