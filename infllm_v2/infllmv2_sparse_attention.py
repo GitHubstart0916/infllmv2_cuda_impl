@@ -534,13 +534,13 @@ def infllmv2_attn_stage1(
     Return:
         S_dmask: The attention scores/probabilities matrix with NSA sparsity pattern.
                  Shape: (num_heads_k, total_q, max_seqlen_k)
-                 Note: max_seqlen_k is set to 524288 by default in the C++ implementation.
+                 Note: max_seqlen_k is set to 2048 by default in the C++ implementation.
     """
     if softmax_scale is None:
         softmax_scale = q.shape[-1] ** (-0.5)
     
-    # max_seqlen_k is set to 524288 by default in the C++ implementation
-    max_seqlen_k = 524288
+    # max_seqlen_k is set to 2048 by default in the C++ implementation
+    max_seqlen_k = 2048
     
     q, k, v = [maybe_contiguous(x) for x in (q, k, v)]
     
