@@ -8,6 +8,8 @@
 #include "topk_to_uint64.cuh"
 #include "uint64_to_bool.cuh"
 #include "max_pooling_1d.cuh"
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAStream.h>
 
 // Forward declarations for Flash Attention functions
 std::vector<at::Tensor> mha_fwd(at::Tensor &q, const at::Tensor &k, const at::Tensor &v, c10::optional<at::Tensor> &out_, c10::optional<at::Tensor> &alibi_slopes_, const float p_dropout, const float softmax_scale, bool is_causal, int window_size_left, int window_size_right, const float softcap, const bool return_softmax, c10::optional<at::Generator> gen_);
@@ -168,11 +170,13 @@ void max_pooling_1d_varlen(
     int padding,
     int block_size,
     int local_blocks,
-    int init_blocks
+    int init_blocks,
+    int total_q
 ) {
-    // WARNING: 为了适配 CUDA Graph，这里将 max_seqlen_k 设置为一个很大的常数（524288）。
+    // WARNING: 为了适配 CUDA Graph，这里将 max_seqlen_k 设置为model_max_len / 16
+    // 根据当前8B模型最长上下文为32k，设置为 32768 / 16 = 2048.
     // TODO: 优化此处的写法，根据实际最大序列长度动态赋值，以避免过多显存占用。
-    const int max_seqlen_k = 524288;
+    const int max_seqlen_k = 2048;
     
     DTYPE_SWITCH(dtype, [&] {
         max_pooling_1d_varlen_func<elem_type>(
@@ -192,10 +196,62 @@ void max_pooling_1d_varlen(
             padding,
             block_size,
             local_blocks,
-            init_blocks
+            init_blocks,
+            total_q
         );
     });
 }
+
+void max_pooling_1d_varlen_v2(
+    torch::Tensor& input,
+    torch::Tensor& output,
+    torch::Tensor& cu_seqlens_q,
+    torch::Tensor& cu_seqlens_k,
+    torch::Tensor& cache_lens,
+    int dtype,
+    int batch_size,
+    int num_heads,
+    int max_seqlen_q,
+    int out_len,
+    int kernel_size,
+    int stride,
+    int padding,
+    int block_size,
+    int local_blocks,
+    int init_blocks,
+    int total_q
+) {
+    const int max_seqlen_k = 2048;
+
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+    if (dtype == 0) {
+        std::cerr << "max_pooling_1d_varlen_v2 only supports bfloat16 now." << std::endl;
+        return;
+    }
+
+    max_pooling_1d_varlen_func<__nv_bfloat16>(
+        stream,
+        reinterpret_cast<__nv_bfloat16*>(input.data_ptr()),
+        reinterpret_cast<__nv_bfloat16*>(output.data_ptr()),
+        cu_seqlens_q.data_ptr<int>(),
+        cu_seqlens_k.data_ptr<int>(),
+        cache_lens.data_ptr<int>(),
+        batch_size,
+        num_heads,
+        max_seqlen_q,
+        max_seqlen_k,
+        out_len,
+        kernel_size,
+        stride,
+        padding,
+        block_size,
+        local_blocks,
+        init_blocks,
+        total_q
+    );
+}
+
 
 PYBIND11_MODULE(C, m) {
     m.doc() = "InfLLM V2 CUDA Implementation with FlashAttention";
@@ -208,6 +264,7 @@ PYBIND11_MODULE(C, m) {
     m.def("uint64_to_bool", &uint64_to_bool, "Convert uint64 representation back to boolean mask");
     m.def("max_pooling_1d", &max_pooling_1d, "Max pooling 1d func");
     m.def("max_pooling_1d_varlen", &max_pooling_1d_varlen, "Max pooling 1d func for variable-length sequences");
+    m.def("max_pooling_1d_varlen_v2", &max_pooling_1d_varlen_v2, "Max pooling 1d func for variable-length sequences v2");
 
     m.def("fwd", &mha_fwd, "Forward pass");
     m.def("varlen_fwd", &mha_varlen_fwd, "Forward pass (variable length)");

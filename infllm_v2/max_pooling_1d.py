@@ -58,6 +58,7 @@ def max_pooling_1d_varlen(
     init_blocks: int,
     block_size: int = 64,
     stride: int = 16,
+    total_q: int = -1,
 ) -> torch.Tensor:
     """
     Variable-length version of max_pooling_1d that handles packed sequences.
@@ -102,17 +103,22 @@ def max_pooling_1d_varlen(
     assert cache_lens.shape[0] == batch_size, f"cache_lens batch size mismatch: {cache_lens.shape[0]} vs {batch_size}"
     
     # Calculate output length based on max sequence length and max cache length
-    max_cache_len = cache_lens.max().item()
-    total_len = max_seqlen_q + max_cache_len
-    out_len = (total_len + block_size - 1) // block_size
+    # max_cache_len = cache_lens.max().item()
+    # total_len = max_seqlen_q + max_cache_len
+    # out_len = (total_len + block_size - 1) // block_size
     
-    # WARNING: 为了适配 CUDA Graph，max_seqlen_k 已在 C 代码中硬编码为 524288
-    warnings.warn(
-        "max_pooling_1d_varlen: max_seqlen_k is hardcoded to 524288 in C code to accommodate CUDA Graph. "
-        "This may over-allocate memory. TODO: Dynamically set this according to real input requirements.",
-        UserWarning
-    )
+    # Read this static const variable from config.json in advance
+    max_context_len = 32768
+    out_len = (max_context_len + block_size - 1) // block_size
     
+    # WARNING: 为了适配 CUDA Graph，max_seqlen_k 已在 C 代码中硬编码为 2048
+    # warnings.warn(
+    #     "max_pooling_1d_varlen: max_seqlen_k is hardcoded to 2048 in C code to accommodate CUDA Graph. "
+    #     "This may over-allocate memory. TODO: Dynamically set this according to real input requirements.",
+    #     UserWarning
+    # )
+    
+    # TODO: modify this to out.zeros_()
     output = torch.zeros(num_heads, total_q, out_len, device=input.device, dtype=input.dtype)
     with torch.cuda.device(input.device):
         stream = torch.cuda.current_stream(input.device).cuda_stream
@@ -134,7 +140,109 @@ def max_pooling_1d_varlen(
             block_size,
             local_blocks,
             init_blocks,
+            total_q,
         )
+    
+    # Log device information before return
+    #print(f"max_pooling_1d_varlen - input device: {input.device}, output device: {output.device}")
+    
+    return output
+
+
+def max_pooling_1d_varlen_v2(
+    input: torch.Tensor, # num_heads x total_q x max_k
+    cu_seqlens_q: torch.Tensor, # batch_size + 1
+    cu_seqlens_k: torch.Tensor, # batch_size + 1
+    cache_lens: torch.Tensor, # batch_size
+    max_seqlen_q: int,
+    local_blocks: int,
+    init_blocks: int,
+    block_size: int = 64,
+    stride: int = 16,
+    total_q: int = -1,
+) -> torch.Tensor:
+    """
+    Variable-length version of max_pooling_1d that handles packed sequences.
+    
+    Args:
+        input: Tensor of shape (num_heads, total_q, max_k) where:
+               - total_q is sum of all query sequence lengths
+               - max_k is the maximum key sequence length (padded)
+        cu_seqlens_q: Cumulative sequence lengths for queries (batch_size + 1,)
+        cu_seqlens_k: Cumulative sequence lengths for keys (batch_size + 1,)
+        cache_lens: Cache lengths for each sequence in the batch (batch_size,)
+        max_seqlen_q: Maximum query sequence length in the batch
+        local_blocks: Number of local blocks for window attention
+        init_blocks: Number of initial blocks to mask with inf
+        block_size: Block size (default: 64)
+        stride: Stride for pooling (default: 16)
+    
+    Returns:
+        output: Tensor of shape (num_heads, total_q, out_len)
+    """
+    from . import _C
+
+    assert input.dtype == torch.float16 or input.dtype == torch.bfloat16
+    assert cu_seqlens_q.dtype == torch.int32
+    assert cu_seqlens_k.dtype == torch.int32
+    assert cache_lens.dtype == torch.int32
+    assert input.dim() == 3, f"Expected 3D input, got {input.dim()}D"
+    
+    input = input.contiguous()
+    cu_seqlens_q = cu_seqlens_q.contiguous()
+    cu_seqlens_k = cu_seqlens_k.contiguous()
+    cache_lens = cache_lens.contiguous()
+    
+    stride = block_size // stride
+    kernel_size = stride + 1
+    padding = 1
+    
+    batch_size = cu_seqlens_q.shape[0] - 1
+    num_heads = input.shape[0]
+    total_q = input.shape[1]
+    
+    # Verify dimensions
+    assert cu_seqlens_q[-1].item() == total_q, f"total_q mismatch: {cu_seqlens_q[-1].item()} vs {total_q}"
+    assert cache_lens.shape[0] == batch_size, f"cache_lens batch size mismatch: {cache_lens.shape[0]} vs {batch_size}"
+    
+    # Calculate output length based on max sequence length and max cache length
+    # max_cache_len = cache_lens.max().item()
+    # total_len = max_seqlen_q + max_cache_len
+    # out_len = (total_len + block_size - 1) // block_size
+    
+    # Read this static const variable from config.json in advance
+    max_context_len = 32768
+    out_len = (max_context_len + block_size - 1) // block_size
+    
+    # WARNING: 为了适配 CUDA Graph，max_seqlen_k 已在 C 代码中硬编码为 2048
+    # warnings.warn(
+    #     "max_pooling_1d_varlen: max_seqlen_k is hardcoded to 2048 in C code to accommodate CUDA Graph. "
+    #     "This may over-allocate memory. TODO: Dynamically set this according to real input requirements.",
+    #     UserWarning
+    # )
+    
+    # TODO: modify this to out.zeros_()
+    output = torch.zeros(num_heads, total_q, out_len, device=input.device, dtype=input.dtype)
+    _C.max_pooling_1d_varlen_v2(
+        input,
+        output,
+        cu_seqlens_q,
+        cu_seqlens_k,
+        cache_lens,
+        input.dtype == torch.bfloat16,
+        batch_size,
+        num_heads,
+        max_seqlen_q,
+        out_len,
+        kernel_size,
+        stride,
+        padding,
+        block_size,
+        local_blocks,
+        init_blocks,
+        total_q,
+    )
+        
     
     # Log device information before return
     #print(f"max_pooling_1d_varlen - input device: {input.device}, output device: {output.device}")

@@ -182,15 +182,16 @@ void max_pooling_1d_varlen_func(
     int padding,
     int block_size,
     int local_blocks,
-    int init_blocks
+    int init_blocks,
+    int total_q
 ) {
     const int threads_per_block = 256;
     
     // Total number of queries across all batches
-    int total_q;
-    cudaMemcpyAsync(&total_q, &cu_seqlens_q[batch_size], sizeof(int), 
-                    cudaMemcpyDeviceToHost, stream);
-    cudaStreamSynchronize(stream);
+    // int total_q;
+    // cudaMemcpyAsync(&total_q, &cu_seqlens_q[batch_size], sizeof(int), 
+    //                 cudaMemcpyDeviceToHost, stream);
+    // cudaStreamSynchronize(stream);
     
     dim3 grid(total_q, num_heads);
     dim3 block(threads_per_block, 1);
