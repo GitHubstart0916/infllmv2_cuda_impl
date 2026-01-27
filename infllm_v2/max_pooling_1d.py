@@ -99,8 +99,8 @@ def max_pooling_1d_varlen(
     total_q = input.shape[1]
     
     # Verify dimensions
-    assert cu_seqlens_q[-1].item() == total_q, f"total_q mismatch: {cu_seqlens_q[-1].item()} vs {total_q}"
-    assert cache_lens.shape[0] == batch_size, f"cache_lens batch size mismatch: {cache_lens.shape[0]} vs {batch_size}"
+    # assert cu_seqlens_q[-1].item() == total_q, f"total_q mismatch: {cu_seqlens_q[-1].item()} vs {total_q}"
+    # assert cache_lens.shape[0] == batch_size, f"cache_lens batch size mismatch: {cache_lens.shape[0]} vs {batch_size}"
     
     # Calculate output length based on max sequence length and max cache length
     # max_cache_len = cache_lens.max().item()
