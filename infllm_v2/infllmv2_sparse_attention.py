@@ -546,7 +546,7 @@ def infllmv2_attn_stage1(
     
     # Get dimensions
     total_q, nheads, head_dim = q.shape
-    batch_size = cu_seqlens_q.numel() - 1
+    # batch_size = cu_seqlens_q.numel() - 1
     nheads_k = k.shape[1]
     nheads_per_group = nheads // nheads_k
     
@@ -557,8 +557,8 @@ def infllmv2_attn_stage1(
     q = q.transpose(1, 2).reshape(total_q * nheads_per_group, nheads_k, head_dim).contiguous()
     
     # Adjust cu_seqlens and max_seqlen for the reshaped query
-    cu_seqlens_q_adjusted = cu_seqlens_q * nheads_per_group
-    max_seqlen_q_adjusted = max_seqlen_q * nheads_per_group
+    # cu_seqlens_q_adjusted = cu_seqlens_q * nheads_per_group
+    # max_seqlen_q_adjusted = max_seqlen_q * nheads_per_group
 
     # Call the underlying CUDA kernel
     result = infllm_cuda.varlen_fwd_stage1(
@@ -566,14 +566,14 @@ def infllmv2_attn_stage1(
         k,
         v,
         None,
-        cu_seqlens_q_adjusted,
+        cu_seqlens_q,
         cu_seqlens_k,
         cu_seqlens_v,
         None,
         None,
         block_table,
         alibi_slopes,
-        max_seqlen_q_adjusted,
+        max_seqlen_q,
         dropout_p,
         softmax_scale,
         True,
@@ -585,9 +585,9 @@ def infllmv2_attn_stage1(
         None,
     )
     
-    S_dmask = result[0] if isinstance(result, list) else result
-    S_dmask = S_dmask[:,:, :max_seqlen_k]
-    S_dmask = torch.where(torch.isnan(S_dmask), 0, S_dmask)
+    # S_dmask = result[0] if isinstance(result, list) else result
+    # S_dmask = S_dmask[:,:, :max_seqlen_k]
+    # S_dmask = torch.where(torch.isnan(S_dmask), 0, S_dmask)
     # if return_attn_probs and S_dmask is not None:
     #     # The kernel now returns shape (num_heads_k, total_q, max_seqlen_k)
     #     assert S_dmask.shape == (nheads_k, total_q, max_seqlen_k), \
@@ -604,7 +604,7 @@ def infllmv2_attn_stage1(
             # if S_dmask.shape[1] > mask_size:  # total_q dimension
             #     S_dmask[:, :mask_size, :] = float('-inf')
     
-    return S_dmask
+    return result[0]
 
 
 def infllmv2_attn_with_kvcache(
