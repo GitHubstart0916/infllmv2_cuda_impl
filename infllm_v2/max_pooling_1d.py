@@ -54,6 +54,8 @@ def max_pooling_1d_varlen(
     cu_seqlens_k: torch.Tensor, # batch_size + 1
     cache_lens: torch.Tensor, # batch_size
     max_seqlen_q: int,
+    max_seqlen_k: int,
+    max_context_len: int,
     local_blocks: int,
     init_blocks: int,
     block_size: int = 64,
@@ -108,7 +110,7 @@ def max_pooling_1d_varlen(
     # out_len = (total_len + block_size - 1) // block_size
     
     # Read this static const variable from config.json in advance
-    max_context_len = 32768
+    # max_context_len = 32768
     out_len = (max_context_len + block_size - 1) // block_size
     
     # WARNING: 为了适配 CUDA Graph，max_seqlen_k 已在 C 代码中硬编码为 2048
@@ -133,6 +135,7 @@ def max_pooling_1d_varlen(
             batch_size,
             num_heads,
             max_seqlen_q,
+            max_seqlen_k,
             out_len,
             kernel_size,
             stride,

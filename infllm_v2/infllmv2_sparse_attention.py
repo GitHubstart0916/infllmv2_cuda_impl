@@ -488,6 +488,7 @@ def infllmv2_attn_stage1(
     cu_seqlens_k,
     cu_seqlens_v,
     max_seqlen_q,
+    max_seqlen_k,
     dropout_p=0.0,
     softmax_scale=None,
     causal=False,
@@ -516,6 +517,8 @@ def infllmv2_attn_stage1(
         cu_seqlens_v: (batch_size + 1,), dtype torch.int32. The cumulative sequence lengths
            of the sequences in the batch, used to index into v.
         max_seqlen_q: int. Maximum query sequence length in the batch.
+        max_seqlen_k: int. Maximum key sequence length in the batch. 
+            This is the k1_cache_len calculated based on the maximum context length, not based on the current k1 length.
         dropout_p: float. Dropout probability.
         softmax_scale: float. The scaling of QK^T before applying softmax.
             Default to 1 / sqrt(headdim).
@@ -540,7 +543,7 @@ def infllmv2_attn_stage1(
         softmax_scale = q.shape[-1] ** (-0.5)
     
     # max_seqlen_k is set to 2048 by default in the C++ implementation
-    max_seqlen_k = 2048
+    # max_seqlen_k = 2048
     
     q, k, v = [maybe_contiguous(x) for x in (q, k, v)]
     
@@ -574,6 +577,7 @@ def infllmv2_attn_stage1(
         block_table,
         alibi_slopes,
         max_seqlen_q,
+        max_seqlen_k,
         dropout_p,
         softmax_scale,
         True,

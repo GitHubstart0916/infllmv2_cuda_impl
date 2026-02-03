@@ -794,6 +794,7 @@ mha_varlen_fwd_stage1(at::Tensor &q,  // total_q x num_heads x head_size, total_
                c10::optional<at::Tensor> &block_table_, // batch_size x max_num_blocks_per_seq
                c10::optional<at::Tensor> &alibi_slopes_, // num_heads or b x num_heads
                int max_seqlen_q,
+               const int max_seqlen_k,
                const float p_dropout,
                const float softmax_scale,
                const bool zero_tensors,
@@ -803,12 +804,6 @@ mha_varlen_fwd_stage1(at::Tensor &q,  // total_q x num_heads x head_size, total_
                const float softcap,
                const bool return_softmax,
                c10::optional<at::Generator> gen_) {
-
-    // WARNING: 为了适配 CUDA Graph，这里将 max_seqlen_k 设置为一个很大的常数（2048）。
-    // TODO: 优化此处的写法，根据实际最大序列长度动态赋值，以避免过多显存占用。
-    // TORCH_WARN("max_seqlen_k is set to a large value (2048) to accommodate CUDA Graph. "
-    //            "This may over-allocate memory. TODO: Dynamically set this according to real input requirements.");
-    const int max_seqlen_k = 2048;
 
     // Otherwise the kernel will be launched from cuda:0 device
     at::cuda::CUDAGuard device_guard{q.device()};
