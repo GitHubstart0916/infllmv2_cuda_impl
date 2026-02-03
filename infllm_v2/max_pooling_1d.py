@@ -53,7 +53,6 @@ def max_pooling_1d_varlen(
     cu_seqlens_k: torch.Tensor, # batch_size + 1
     cache_lens: torch.Tensor, # batch_size
     max_seqlen_q: int,
-    max_seqlen_k: int,
     max_context_len: int,
     local_blocks: int,
     init_blocks: int,
@@ -91,6 +90,12 @@ def max_pooling_1d_varlen(
     cu_seqlens_k = cu_seqlens_k.contiguous()
     cache_lens = cache_lens.contiguous()
     
+    # TODO: Based on the passed parameters in hf code, 
+    # the stride passed in should be the stride used during compress k1. 
+    # This differs from the kernel comment and requires subsequent verification.
+    max_seqlen_k = max_context_len // stride
+    out_len = (max_context_len + block_size - 1) // block_size
+    
     stride = block_size // stride
     kernel_size = stride + 1
     padding = 1
@@ -110,7 +115,6 @@ def max_pooling_1d_varlen(
     
     # Read this static const variable from config.json in advance
     # max_context_len = 32768
-    out_len = (max_context_len + block_size - 1) // block_size
     
     # WARNING: 为了适配 CUDA Graph，max_seqlen_k 已在 C 代码中硬编码为 2048
     # warnings.warn(
